@@ -1,3 +1,5 @@
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/heychirru/Social-Media-Dashboard?utm_source=oss&utm_medium=github&utm_campaign=heychirru%2FSocial-Media-Dashboard&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 # Social Media Dashboard
 
 ## Overview
