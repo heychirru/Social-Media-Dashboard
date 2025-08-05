@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - Social Media Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .search-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+        }
+        .post-card {
+            border-left: 4px solid #007bff;
+            margin-bottom: 15px;
+            transition: transform 0.2s ease;
+        }
+        .post-card:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line me-2"></i>Social Media Dashboard
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/search">Search</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">Configuration</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about">About</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Demo Mode Badge -->
+    <div th:if="${demoMode}" class="position-fixed top-0 end-0 p-3" style="z-index: 1000;">
+        <span class="badge bg-warning text-dark">
+            <i class="fas fa-exclamation-triangle me-1"></i>Demo Mode
+        </span>
+    </div>
+
+    <!-- Search Header -->
+    <div class="search-header">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <h1 class="text-center mb-4">
+                        <i class="fas fa-search me-3"></i>Search Social Media
+                    </h1>
+                    <form method="GET" action="/search" class="d-flex">
+                        <input type="text" name="query" class="form-control form-control-lg me-2" 
+                               placeholder="Enter your search query..." 
+                               th:value="${query}" required>
+                        <button type="submit" class="btn btn-light btn-lg">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    <div class="container py-5">
+        <!-- Error Message -->
+        <div th:if="${error}" class="alert alert-danger mb-4">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span th:text="${error}">Error occurred during search.</span>
+        </div>
+
+        <!-- Search Results -->
+        <div th:if="${searchResults and !searchResults.isEmpty()}">
+            <h2 class="mb-4">Search Results for "<span th:text="${query}">query</span>"</h2>
+            
+            <!-- Twitter/X Results -->
+            <div th:if="${searchResults.containsKey('Twitter/X') and !searchResults.get('Twitter/X').isEmpty()}" class="mb-5">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fab fa-twitter me-2"></i>Twitter/X Results
+                            <span class="badge bg-light text-dark ms-2" 
+                                  th:text="${searchResults.get('Twitter/X').size()} + ' results'">0 results</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div th:each="post : ${searchResults.get('Twitter/X')}" class="col-md-6 mb-3">
+                                <div class="card post-card">
+                                    <div class="card-body">
+                                        <p class="card-text" th:text="${#strings.abbreviate(post.content, 150)}">Tweet content...</p>
+                                        <div class="d-flex justify-content-between text-muted small">
+                                            <span><i class="fas fa-heart me-1"></i><span th:text="${post.likes}">0</span></span>
+                                            <span><i class="fas fa-comment me-1"></i><span th:text="${post.comments}">0</span></span>
+                                            <span><i class="fas fa-retweet me-1"></i><span th:text="${post.shares}">0</span></span>
+                                            <span th:text="${#temporals.format(post.createdAt, 'MMM dd, yyyy')}">Date</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instagram Results -->
+            <div th:if="${searchResults.containsKey('Instagram') and !searchResults.get('Instagram').isEmpty()}" class="mb-5">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fab fa-instagram me-2"></i>Instagram Results
+                            <span class="badge bg-light text-dark ms-2" 
+                                  th:text="${searchResults.get('Instagram').size()} + ' results'">0 results</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div th:each="post : ${searchResults.get('Instagram')}" class="col-md-6 mb-3">
+                                <div class="card post-card">
+                                    <div class="card-body">
+                                        <p class="card-text" th:text="${#strings.abbreviate(post.content, 150)}">Post content...</p>
+                                        <div class="d-flex justify-content-between text-muted small">
+                                            <span><i class="fas fa-heart me-1"></i><span th:text="${post.likes}">0</span></span>
+                                            <span><i class="fas fa-comment me-1"></i><span th:text="${post.comments}">0</span></span>
+                                            <span th:text="${#temporals.format(post.createdAt, 'MMM dd, yyyy')}">Date</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No Results Message -->
+            <div th:if="${searchResults.isEmpty() or (searchResults.get('Twitter/X').isEmpty() and searchResults.get('Instagram').isEmpty())}" 
+                 class="text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No results found</h4>
+                <p class="text-muted">Try adjusting your search terms or check your spelling.</p>
+            </div>
+        </div>
+
+        <!-- Initial State -->
+        <div th:unless="${searchResults}" class="text-center py-5">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">Search across social media platforms</h4>
+            <p class="text-muted">Enter a search query above to find posts and tweets.</p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4">
+        <div class="container text-center">
+            <p>&copy; 2024 Social Media Dashboard. Built with Spring Boot and Bootstrap.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

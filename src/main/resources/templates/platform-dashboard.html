@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${platform} + ' - ' + ${username} + ' Analytics'">Platform Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .platform-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            transition: transform 0.3s ease;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .post-card {
+            border-left: 4px solid #007bff;
+            margin-bottom: 15px;
+        }
+        .engagement-rate {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line me-2"></i>Social Media Dashboard
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/search">Search</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">Configuration</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about">About</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Demo Mode Badge -->
+    <div th:if="${demoMode}" class="position-fixed top-0 end-0 p-3" style="z-index: 1000;">
+        <span class="badge bg-warning text-dark">
+            <i class="fas fa-exclamation-triangle me-1"></i>Demo Mode
+        </span>
+    </div>
+
+    <!-- Header -->
+    <div class="platform-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-2">
+                        <i th:if="${platform == 'Instagram'}" class="fab fa-instagram me-3"></i>
+                        <i th:if="${platform == 'Twitter/X'}" class="fab fa-twitter me-3"></i>
+                        <span th:text="${platform}">Platform</span> Analytics
+                    </h1>
+                    <p class="mb-0">
+                        <i class="fas fa-user-circle me-2"></i>
+                        <span th:text="${username}">Username</span>
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a th:href="@{/dashboard/{username}(username=${username})}" class="btn btn-outline-light me-2">
+                        <i class="fas fa-chart-line me-2"></i>All Platforms
+                    </a>
+                    <a href="/" class="btn btn-outline-light">
+                        <i class="fas fa-home me-2"></i>Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Platform Statistics -->
+    <section class="py-4">
+        <div class="container">
+            <h2 class="mb-4">Platform Statistics</h2>
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                            <h5 class="card-title" th:text="${stats.followers}">0</h5>
+                            <p class="card-text">Followers</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-user-plus fa-2x text-success mb-2"></i>
+                            <h5 class="card-title" th:text="${stats.following}">0</h5>
+                            <p class="card-text">Following</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-file-alt fa-2x text-info mb-2"></i>
+                            <h5 class="card-title" th:text="${stats.totalPosts}">0</h5>
+                            <p class="card-text" th:text="${platform == 'Twitter/X' ? 'Tweets' : 'Posts'}">Posts</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                            <h5 class="card-title engagement-rate" 
+                                th:text="${#numbers.formatDecimal(stats.engagementRate, 1, 2)} + '%'">0%</h5>
+                            <p class="card-text">Engagement Rate</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Engagement Metrics -->
+    <section class="py-4 bg-light">
+        <div class="container">
+            <h2 class="mb-4">Engagement Metrics</h2>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-heart fa-2x text-danger mb-2"></i>
+                            <h5 class="card-title" th:text="${stats.totalLikes}">0</h5>
+                            <p class="card-text">Total Likes</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-comments fa-2x text-info mb-2"></i>
+                            <h5 class="card-title" th:text="${stats.totalComments}">0</h5>
+                            <p class="card-text">Total Comments</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-share fa-2x text-success mb-2"></i>
+                            <h5 class="card-title" th:text="${stats.totalShares}">0</h5>
+                            <p class="card-text" th:text="${platform == 'Twitter/X' ? 'Retweets' : 'Shares'}">Shares</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Recent Posts -->
+    <section class="py-4">
+        <div class="container">
+            <h2 class="mb-4">Recent Posts</h2>
+            <div class="row">
+                <div th:each="post : ${stats.recentPosts}" class="col-md-6 mb-3">
+                    <div class="card post-card">
+                        <div class="card-body">
+                            <p class="card-text" th:text="${#strings.abbreviate(post.content, 150)}">Post content...</p>
+                            <div class="d-flex justify-content-between text-muted small">
+                                <span><i class="fas fa-heart me-1"></i><span th:text="${post.likes}">0</span></span>
+                                <span><i class="fas fa-comment me-1"></i><span th:text="${post.comments}">0</span></span>
+                                <span th:if="${platform == 'Twitter/X'}"><i class="fas fa-retweet me-1"></i><span th:text="${post.shares}">0</span></span>
+                                <span th:text="${#temporals.format(post.createdAt, 'MMM dd, yyyy')}">Date</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- No Posts Message -->
+            <div th:if="${stats.recentPosts.isEmpty()}" class="text-center py-5">
+                <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No recent posts found</h4>
+                <p class="text-muted">Recent posts will appear here once they are available.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Platform-Specific Features -->
+    <section class="py-4 bg-light">
+        <div class="container">
+            <h2 class="mb-4">Platform Features</h2>
+            <div class="row">
+                <!-- Instagram Features -->
+                <div th:if="${platform == 'Instagram'}" class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fab fa-instagram me-2"></i>Instagram Features
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled">
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Story analytics</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Reel performance tracking</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Hashtag analysis</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Audience insights</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Twitter Features -->
+                <div th:if="${platform == 'Twitter/X'}" class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <i class="fab fa-twitter me-2"></i>Twitter/X Features
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled">
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Tweet analytics</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Retweet tracking</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Mention monitoring</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Trend analysis</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4">
+        <div class="container text-center">
+            <p>&copy; 2024 Social Media Dashboard. Built with Spring Boot and Bootstrap.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

@@ -1,0 +1,14 @@
+# Social Media Dashboard API Configuration
+# Copy this file to config.properties and fill in your actual API keys
+
+# Instagram Graph API Access Token
+# Get this from: https://developers.facebook.com/docs/instagram-basic-display-api/getting-started
+instagram.access.token=your_instagram_access_token_here
+
+# Twitter API v2 Bearer Token
+# Get this from: https://developer.twitter.com/en/portal/dashboard
+twitter.bearer.token=your_twitter_bearer_token_here
+
+# Note: You can also set these as environment variables:
+# INSTAGRAM_ACCESS_TOKEN=your_token_here
+# TWITTER_BEARER_TOKEN=your_token_here 
