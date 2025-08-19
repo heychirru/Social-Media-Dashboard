@@ -1,139 +1,226 @@
 package com.example.dashboard.controller;
 
-import java.util.List;
-import java.util.Map;
-
+import com.example.dashboard.api.SocialMediaApiService;
+import com.example.dashboard.model.SocialMediaPost;
+import com.example.dashboard.model.SocialMediaStats;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
-import com.example.dashboard.api.SocialMediaApiService;
-import com.example.dashboard.config.ApiConfig;
-import com.example.dashboard.model.SocialMediaPost;
-import com.example.dashboard.model.SocialMediaStats;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @Controller
 public class WebController {
 
-    private final SocialMediaApiService apiService;
-
-    public WebController() {
-        this.apiService = new SocialMediaApiService(
-                ApiConfig.getInstagramAccessToken(), null);
-    }
+    @Autowired
+    private SocialMediaApiService apiService;
 
     /**
-     * Home page
+     * Root path - HTML landing page
      */
     @GetMapping("/")
     public String home(Model model) {
-        model.addAttribute("demoMode", ApiConfig.isDemoMode());
-        model.addAttribute("instagramConfigured", !"demo_token".equals(ApiConfig.getInstagramAccessToken()));
+        model.addAttribute("title", "Social Media Dashboard");
+        model.addAttribute("message", "Welcome to Social Media Dashboard");
+
+        // Add configuration status to help with setup
+        boolean isConfigured = apiService.isInstagramConfigured();
+        String configStatus = apiService.getInstagramStatus();
+
+        model.addAttribute("isConfigured", isConfigured);
+        model.addAttribute("configStatus", configStatus);
+
+        if (!isConfigured) {
+            model.addAttribute("setupMessage", "Please configure your Instagram API credentials to get started.");
+            model.addAttribute("setupInstructions", Map.of(
+                    "step1", "Get Instagram API credentials from Facebook Developers Console",
+                    "step2", "Set INSTAGRAM_ACCESS_TOKEN environment variable",
+                    "step3", "Restart the application",
+                    "step4", "Test with /dashboard?username=YOUR_INSTAGRAM_USERNAME"
+            ));
+        }
+
         return "index";
     }
 
     /**
-     * Dashboard page for a specific user
+     * API info as JSON
      */
-    @GetMapping("/dashboard/{username}")
-    public String dashboard(@PathVariable String username, Model model) {
-        try {
-            Map<String, SocialMediaStats> allData = apiService.fetchAllPlatformData(username);
-            Map<String, Object> aggregated = apiService.getAggregatedStats(username);
+    @GetMapping("/api")
+    @ResponseBody
+    public Map<String, Object> apiInfo() {
+        Map<String, Object> info = new HashMap<>();
+        info.put("message", "Social Media Dashboard API");
+        info.put("status", "running");
+        info.put("version", "1.0.0");
+        info.put("configured", apiService.isInstagramConfigured());
+        info.put("config_status", apiService.getInstagramStatus());
 
-            model.addAttribute("username", username);
-            model.addAttribute("platformData", allData);
-            model.addAttribute("aggregatedStats", aggregated);
-            model.addAttribute("demoMode", ApiConfig.isDemoMode());
+        Map<String, String> endpoints = new HashMap<>();
+        endpoints.put("health", "/api/v1/health");
+        endpoints.put("config", "/api/v1/config");
+        endpoints.put("dashboard", "/dashboard?username=YOUR_USERNAME");
+        endpoints.put("stats", "/api/v1/stats/YOUR_USERNAME");
+        endpoints.put("platforms", "/api/v1/platforms/YOUR_USERNAME");
 
-            return "dashboard";
-        } catch (Exception e) {
-            model.addAttribute("error", e.getMessage());
-            return "error";
+        info.put("endpoints", endpoints);
+
+        if (!apiService.isInstagramConfigured()) {
+            info.put("warning", "Instagram API is not configured. Please set INSTAGRAM_ACCESS_TOKEN environment variable.");
         }
+
+        return info;
     }
 
-    /**
-     * Dashboard page for a specific user (query parameter version)
-     */
     @GetMapping("/dashboard")
-    public String dashboardQuery(@RequestParam String username, Model model) {
-        try {
-            Map<String, SocialMediaStats> allData = apiService.fetchAllPlatformData(username);
-            Map<String, Object> aggregated = apiService.getAggregatedStats(username);
+    public String dashboard(@RequestParam String username, Model model) {
+        System.out.println(">>> Received request for dashboard");
+        System.out.println(">>> Username parameter: [" + username + "]");
 
+        try {
+            // Check if service is configured
+            if (!apiService.isInstagramConfigured()) {
+                model.addAttribute("error", "Instagram API is not configured. Please set up your Instagram API credentials.");
+                model.addAttribute("username", username);
+                model.addAttribute("hasError", true);
+                model.addAttribute("errorType", "CONFIGURATION_ERROR");
+                model.addAttribute("configInstructions", Map.of(
+                        "step1", "Visit https://developers.facebook.com/",
+                        "step2", "Create an app and add Instagram Basic Display product",
+                        "step3", "Generate an access token",
+                        "step4", "Set INSTAGRAM_ACCESS_TOKEN environment variable",
+                        "step5", "Restart the application"
+                ));
+                return "error";
+            }
+
+            // Fetch Instagram profile data
+            SocialMediaStats profile = apiService.fetchInstagramProfile(username);
+            System.out.println(">>> API returned profile: " + profile);
+
+            // Fetch Instagram posts
+            List<SocialMediaPost> posts = apiService.fetchInstagramPosts(username);
+            System.out.println(">>> API returned posts count: " + (posts != null ? posts.size() : 0));
+
+            // Create platformData map that the template expects
+            Map<String, SocialMediaStats> platformData = new HashMap<>();
+            platformData.put("Instagram", profile);
+
+            // Add all the required attributes to the model
+            model.addAttribute("aggregatedStats", profile);
+            model.addAttribute("platformData", platformData);
+            model.addAttribute("posts", posts);
             model.addAttribute("username", username);
-            model.addAttribute("platformData", allData);
-            model.addAttribute("aggregatedStats", aggregated);
-            model.addAttribute("demoMode", ApiConfig.isDemoMode());
+            model.addAttribute("totalPlatforms", 1);
+            model.addAttribute("hasError", false);
 
             return "dashboard";
-        } catch (Exception e) {
-            model.addAttribute("error", e.getMessage());
-            return "error";
-        }
-    }
 
-    /**
-     * Platform-specific dashboard
-     */
-    @GetMapping("/platform/{platform}/{username}")
-    public String platformDashboard(
-            @PathVariable String platform,
-            @PathVariable String username,
-            Model model) {
-        try {
-            SocialMediaStats stats = apiService.fetchPlatformData(platform, username);
-
-            model.addAttribute("platform", platform);
+        } catch (UnsupportedOperationException e) {
+            System.err.println(">>> Platform not supported: " + e.getMessage());
+            model.addAttribute("error", "Platform not supported: " + e.getMessage());
             model.addAttribute("username", username);
-            model.addAttribute("stats", stats);
-            model.addAttribute("demoMode", ApiConfig.isDemoMode());
+            model.addAttribute("hasError", true);
+            model.addAttribute("errorType", "UNSUPPORTED_PLATFORM");
+            return "error";
 
-            return "platform-dashboard";
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
+            System.err.println(">>> Error loading dashboard for username: " + username);
+            System.err.println(">>> Error details: " + e.getMessage());
+
             model.addAttribute("error", e.getMessage());
+            model.addAttribute("username", username);
+            model.addAttribute("hasError", true);
+            model.addAttribute("errorType", "API_ERROR");
+
+            // Provide specific error guidance based on error message
+            if (e.getMessage().contains("access denied") || e.getMessage().contains("OAuthException")) {
+                model.addAttribute("errorCategory", "AUTHENTICATION");
+                model.addAttribute("suggestions", List.of(
+                        "Check if your Instagram access token is valid and not expired",
+                        "Verify that your app has the required permissions (user_profile, user_media)",
+                        "Regenerate your access token from Facebook Developers Console",
+                        "Ensure your Instagram account is connected to the Facebook app"
+                ));
+            } else if (e.getMessage().contains("rate limit")) {
+                model.addAttribute("errorCategory", "RATE_LIMIT");
+                model.addAttribute("suggestions", List.of(
+                        "You have exceeded Instagram's API rate limits",
+                        "Wait for the rate limit to reset (typically 1 hour)",
+                        "Reduce the frequency of API calls",
+                        "Consider implementing caching to reduce API requests"
+                ));
+            } else if (e.getMessage().contains("not found")) {
+                model.addAttribute("errorCategory", "USER_NOT_FOUND");
+                model.addAttribute("suggestions", List.of(
+                        "Verify the Instagram username is correct",
+                        "Check if the Instagram account exists and is public",
+                        "Try using the Instagram user ID instead of username",
+                        "Ensure the account is not private or restricted"
+                ));
+            } else if (e.getMessage().contains("network") || e.getMessage().contains("connectivity")) {
+                model.addAttribute("errorCategory", "NETWORK");
+                model.addAttribute("suggestions", List.of(
+                        "Check your internet connection",
+                        "Verify that Instagram API endpoints are accessible",
+                        "Check for any firewall or proxy issues",
+                        "Try again in a few minutes"
+                ));
+            } else {
+                model.addAttribute("errorCategory", "GENERAL");
+                model.addAttribute("suggestions", List.of(
+                        "Check the application logs for detailed error information",
+                        "Verify your Instagram API configuration",
+                        "Try with a different Instagram username",
+                        "Contact support if the issue persists"
+                ));
+            }
+
             return "error";
         }
     }
 
     /**
-     * Search page
+     * Health check endpoint for dashboard
      */
-    @GetMapping("/search")
-    public String searchPage(@RequestParam(required = false) String query, Model model) {
-        if (query != null && !query.trim().isEmpty()) {
-            try {
-                Map<String, List<SocialMediaPost>> results = apiService.searchAcrossPlatforms(query, 20);
-                model.addAttribute("searchResults", results);
-                model.addAttribute("query", query);
-            } catch (Exception e) {
-                model.addAttribute("error", e.getMessage());
+    @GetMapping("/dashboard/health")
+    @ResponseBody
+    public Map<String, Object> dashboardHealth() {
+        Map<String, Object> health = new HashMap<>();
+        health.put("timestamp", System.currentTimeMillis());
+        health.put("service", "dashboard");
+
+        try {
+            boolean isConfigured = apiService.isInstagramConfigured();
+            String configStatus = apiService.getInstagramStatus();
+
+            health.put("status", isConfigured ? "UP" : "CONFIGURATION_REQUIRED");
+            health.put("instagram_configured", isConfigured);
+            health.put("config_status", configStatus);
+
+            if (isConfigured) {
+                // Test with a basic API call to verify connectivity
+                // Note: This would require a valid test user, so we'll just check configuration
+                health.put("instagram_service", "READY");
+                health.put("message", "Instagram API is configured and ready");
+            } else {
+                health.put("instagram_service", "NOT_CONFIGURED");
+                health.put("message", "Instagram API configuration required");
+                health.put("required_action", "Set INSTAGRAM_ACCESS_TOKEN environment variable");
             }
+
+        } catch (Exception e) {
+            health.put("status", "DOWN");
+            health.put("instagram_service", "ERROR");
+            health.put("error", e.getMessage());
+            health.put("message", "Service health check failed");
         }
 
-        model.addAttribute("demoMode", ApiConfig.isDemoMode());
-        return "search";
-    }
-
-    /**
-     * Configuration page
-     */
-    @GetMapping("/config")
-    public String configPage(Model model) {
-        model.addAttribute("demoMode", ApiConfig.isDemoMode());
-        model.addAttribute("instagramConfigured", !"demo_token".equals(ApiConfig.getInstagramAccessToken()));
-        return "config";
-    }
-
-    /**
-     * About page
-     */
-    @GetMapping("/about")
-    public String aboutPage(Model model) {
-        model.addAttribute("demoMode", ApiConfig.isDemoMode());
-        return "about";
+        return health;
     }
 }

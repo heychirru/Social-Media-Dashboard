@@ -82,4 +82,8 @@ public class SocialMediaPost {
                 ", author='" + authorUsername + '\'' +
                 '}';
     }
+
+    public Object getCaption() {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
 }

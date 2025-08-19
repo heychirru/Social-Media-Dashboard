@@ -1,259 +1,331 @@
 package com.example.dashboard.api;
 
-import java.io.IOException;
-import java.time.OffsetDateTime;
+import com.example.dashboard.config.InstagramConfig;
+import com.example.dashboard.model.SocialMediaPost;
+import com.example.dashboard.model.SocialMediaStats;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import com.example.dashboard.model.SocialMediaPost;
-import com.example.dashboard.model.SocialMediaStats;
-
+@Service
 public class InstagramApiService {
-    private static final String GRAPH_API_BASE_URL = "https://graph.facebook.com/v23.0";
-    private static final int DEFAULT_POST_LIMIT = 10;
-    private final String accessToken;
-    private final CloseableHttpClient httpClient;
-    private static final Logger logger = Logger.getLogger(InstagramApiService.class.getName());
 
-    public InstagramApiService(String accessToken) {
-        this.accessToken = accessToken;
-        this.httpClient = HttpClients.createDefault();
+    private final InstagramConfig config;
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public InstagramApiService(InstagramConfig config) {
+        this.config = config;
+        this.restTemplate = new RestTemplate();
+        this.objectMapper = new ObjectMapper();
     }
 
-    /**
-     * Main use case: Get Instagram stats from a list of Facebook Page IDs.
-     * Each page must be connected to an Instagram Business or Creator account.
-     *
-     * @param pageIds List of Facebook Page IDs
-     * @return List of SocialMediaStats for each connected IG account
-     */
-    public List<SocialMediaStats> fetchStatsForPages(List<String> pageIds) {
-        List<SocialMediaStats> allStats = new ArrayList<>();
-        for (String pageId : pageIds) {
-            try {
-                SocialMediaStats stats = fetchUserStatsFromPageId(pageId);
-                if (stats != null) {
-                    allStats.add(stats);
-                }
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, "Failed to fetch stats for page ID: " + pageId, e);
-            }
-        }
-        return allStats;
-    }
+    public SocialMediaStats fetchProfileStats(String username, String accessToken) throws RuntimeException {
+        validateConfiguration();
 
-    /**
-     * Fetch Instagram user profile and recent media using a Facebook Page ID
-     *
-     * @param pageId Facebook Page ID (must be connected to IG Business account)
-     * @return SocialMediaStats or dummy fallback
-     */
-    @SuppressWarnings({ "LoggerStringConcat", "UseSpecificCatch" })
-    public SocialMediaStats fetchUserStatsFromPageId(String pageId) {
+        String token = getValidToken(accessToken);
+
         try {
-            // 1. Get Instagram Business Account ID from Facebook Page
-            String instagramUserId = getInstagramUserIdFromPage(pageId);
-            if (instagramUserId == null) {
-                logger.warning("Instagram business account not linked to page ID: " + pageId);
-                return createDummyInstagramStats("unknown-" + pageId);
-            }
+            String userId = getUserIdFromUsername(username, token);
 
-            // 2. Get IG profile (follower count, username, etc.)
-            String profileUrl = GRAPH_API_BASE_URL + "/" + instagramUserId +
-                    "?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=" +
-                    accessToken;
-            String profileResponse = makeApiRequest(profileUrl);
-            JSONObject profileData = new JSONObject(profileResponse);
-            String username = profileData.optString("username", "unknown");
+            // Fetch profile data
+            String profileUrl = String.format("%s/%s?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=%s",
+                    config.getUrl(), userId, token);
 
-            // 3. Get recent media
-            String mediaUrl = GRAPH_API_BASE_URL + "/" + instagramUserId +
-                    "/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&access_token="
-                    +
-                    accessToken;
-            String mediaResponse = makeApiRequest(mediaUrl);
-            JSONObject mediaData = new JSONObject(mediaResponse);
-            List<SocialMediaPost> recentPosts = parseRecentPosts(mediaData.getJSONArray("data"), DEFAULT_POST_LIMIT);
+            ResponseEntity<String> response = restTemplate.getForEntity(profileUrl, String.class);
+            JsonNode profileData = objectMapper.readTree(response.getBody());
 
-            // 4. Calculate engagement rate
-            int totalLikes = recentPosts.stream().mapToInt(SocialMediaPost::getLikes).sum();
-            int totalComments = recentPosts.stream().mapToInt(SocialMediaPost::getComments).sum();
-            int followers = profileData.optInt("followers_count", 0);
-            double engagementRate = followers > 0
-                    ? ((double) (totalLikes + totalComments) / followers) * 100
-                    : 0;
+            // Fetch recent posts for engagement metrics
+            List<SocialMediaPost> recentPosts = fetchRecentPosts(username, token);
+
+            // Calculate engagement metrics
+            EngagementMetrics metrics = calculateEngagementMetrics(recentPosts);
+
+            int followersCount = profileData.has("followers_count") ?
+                    profileData.get("followers_count").asInt() : 0;
+            int followingCount = profileData.has("follows_count") ?
+                    profileData.get("follows_count").asInt() : 0;
+            int postsCount = profileData.has("media_count") ?
+                    profileData.get("media_count").asInt() : 0;
+
+            double engagementRate = calculateEngagementRate(metrics, followersCount, recentPosts.size());
+
+            System.out.println("✅ Successfully fetched Instagram data for: " + username);
 
             return new SocialMediaStats(
-                    "Instagram",
-                    username,
-                    followers,
-                    profileData.optInt("follows_count", 0),
-                    profileData.optInt("media_count", 0),
-                    totalLikes,
-                    totalComments,
-                    0,
+                    profileData.get("id").asText(),
+                    profileData.get("username").asText(),
+                    followersCount,
+                    followingCount,
+                    postsCount,
+                    metrics.totalLikes,
+                    metrics.totalComments,
+                    metrics.totalShares,
                     engagementRate,
-                    OffsetDateTime.now().toLocalDateTime(),
-                    recentPosts);
+                    LocalDateTime.now(),
+                    recentPosts
+            );
+
+        } catch (HttpClientErrorException e) {
+            throw handleHttpError(e, username, "profile stats");
+        } catch (ResourceAccessException e) {
+            throw new RuntimeException("Network connectivity issue while fetching profile for username: " + username + ". Please check your internet connection.", e);
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error fetching Instagram stats for page ID: " + pageId, e);
-            return createDummyInstagramStats("unknown-" + pageId);
+            throw new RuntimeException("Failed to fetch Instagram profile stats for username: " + username + ". Error: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Use case: Resolve Instagram Business Account ID linked to a Facebook Page.
-     */
-    @SuppressWarnings("UseSpecificCatch")
-    private String getInstagramUserIdFromPage(String pageId) {
+    public List<SocialMediaPost> fetchRecentPosts(String username, String accessToken) throws RuntimeException {
+        validateConfiguration();
+
+        String token = getValidToken(accessToken);
+
         try {
-            String url = GRAPH_API_BASE_URL + "/" + pageId +
-                    "?fields=instagram_business_account&access_token=" + accessToken;
-            String response = makeApiRequest(url);
-            JSONObject json = new JSONObject(response);
+            String userId = getUserIdFromUsername(username, token);
 
-            if (json.has("instagram_business_account")) {
-                return json.getJSONObject("instagram_business_account").optString("id", null);
-            } else {
-                return null;
+            // Fetch recent media
+            String mediaUrl = String.format("%s/%s/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count&limit=25&access_token=%s",
+                    config.getUrl(), userId, token);
+
+            ResponseEntity<String> response = restTemplate.getForEntity(mediaUrl, String.class);
+            JsonNode mediaData = objectMapper.readTree(response.getBody());
+
+            List<SocialMediaPost> posts = new ArrayList<>();
+
+            if (mediaData.has("data") && mediaData.get("data").isArray()) {
+                for (JsonNode post : mediaData.get("data")) {
+                    posts.add(parsePostData(post, username));
+                }
             }
+
+            System.out.println("✅ Successfully fetched " + posts.size() + " Instagram posts for: " + username);
+            return posts;
+
+        } catch (HttpClientErrorException e) {
+            throw handleHttpError(e, username, "recent posts");
+        } catch (ResourceAccessException e) {
+            throw new RuntimeException("Network connectivity issue while fetching posts for username: " + username + ". Please check your internet connection.", e);
         } catch (Exception e) {
-            logger.log(Level.WARNING, "Failed to get IG account from Page ID: " + pageId, e);
-            return null;
+            throw new RuntimeException("Failed to fetch Instagram posts for username: " + username + ". Error: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Use case: Parse media feed response into app-friendly post objects
-     */
-    private List<SocialMediaPost> parseRecentPosts(JSONArray postsArray, int postLimit) {
+    public List<SocialMediaPost> searchPosts(String query, String accessToken, int maxResults) throws RuntimeException {
+        validateConfiguration();
+
+        String token = getValidToken(accessToken);
+
+        try {
+            // Instagram's hashtag search
+            String searchUrl = String.format("%s/ig_hashtag_search?q=%s&access_token=%s",
+                    config.getUrl(), query.replace("#", ""), token);
+
+            ResponseEntity<String> searchResponse = restTemplate.getForEntity(searchUrl, String.class);
+            JsonNode searchData = objectMapper.readTree(searchResponse.getBody());
+
+            List<SocialMediaPost> posts = new ArrayList<>();
+
+            if (searchData.has("data") && searchData.get("data").isArray() && searchData.get("data").size() > 0) {
+                JsonNode firstResult = searchData.get("data").get(0);
+                if (firstResult.has("id")) {
+                    String hashtagId = firstResult.get("id").asText();
+                    posts = fetchHashtagPosts(hashtagId, token, maxResults);
+                }
+            }
+
+            System.out.println("✅ Successfully searched Instagram posts for query: " + query + ", found: " + posts.size());
+            return posts;
+
+        } catch (HttpClientErrorException e) {
+            throw handleHttpError(e, query, "search posts");
+        } catch (ResourceAccessException e) {
+            throw new RuntimeException("Network connectivity issue while searching for query: " + query + ". Please check your internet connection.", e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to search Instagram posts for query: " + query + ". Error: " + e.getMessage(), e);
+        }
+    }
+
+    // Helper methods
+    private void validateConfiguration() throws RuntimeException {
+        if (!config.hasValidAccessToken()) {
+            throw new RuntimeException("Instagram API is not properly configured. Please provide a valid access token via INSTAGRAM_ACCESS_TOKEN environment variable or application properties.");
+        }
+    }
+
+    private String getValidToken(String providedToken) throws RuntimeException {
+        // Use provided token if valid, otherwise fall back to config
+        String token = (providedToken != null && isValidToken(providedToken)) ?
+                providedToken : config.getAccessToken();
+
+        if (!isValidToken(token)) {
+            throw new RuntimeException("Invalid Instagram access token provided. Please check your token configuration.");
+        }
+
+        return token;
+    }
+
+    private boolean isValidToken(String token) {
+        return token != null &&
+                !token.trim().isEmpty() &&
+                !token.equals("demo-token") &&
+                !token.startsWith("$") &&
+                !token.contains("your_access_token_here") &&
+                token.length() > 20; // Basic length check
+    }
+
+    private String getUserIdFromUsername(String username, String token) throws Exception {
+        // If username is already an ID (numeric), return it
+        if (username.matches("\\d+")) {
+            return username;
+        }
+
+        // For Instagram Basic Display API, you typically use 'me' endpoint
+        String searchUrl = String.format("%s/me?fields=id,username&access_token=%s", config.getUrl(), token);
+
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(searchUrl, String.class);
+            JsonNode userData = objectMapper.readTree(response.getBody());
+            return userData.get("id").asText();
+        } catch (HttpClientErrorException e) {
+            String errorBody = e.getResponseBodyAsString();
+            System.err.println("❌ Error resolving username " + username + " to user ID: " + errorBody);
+            throw new RuntimeException("Unable to resolve username '" + username + "' to user ID. HTTP " + e.getStatusCode() + ": " + errorBody, e);
+        }
+    }
+
+    private SocialMediaPost parsePostData(JsonNode postNode, String username) {
+        String postId = postNode.has("id") ? postNode.get("id").asText() : "";
+        String caption = postNode.has("caption") ? postNode.get("caption").asText() : "";
+        String mediaUrl = postNode.has("media_url") ? postNode.get("media_url").asText() : "";
+        String mediaType = postNode.has("media_type") ? postNode.get("media_type").asText().toLowerCase() : "image";
+        int likes = postNode.has("like_count") ? postNode.get("like_count").asInt() : 0;
+        int comments = postNode.has("comments_count") ? postNode.get("comments_count").asInt() : 0;
+
+        LocalDateTime timestamp = LocalDateTime.now();
+        if (postNode.has("timestamp")) {
+            try {
+                String timestampStr = postNode.get("timestamp").asText();
+                
+                // Handle Instagram's timestamp format: 2025-08-13T07:00:18+0000
+                // Convert +0000 to Z for proper ISO parsing
+                if (timestampStr.endsWith("+0000")) {
+                    timestampStr = timestampStr.replace("+0000", "Z");
+                }
+                
+                // Parse as ZonedDateTime first, then convert to LocalDateTime
+                if (timestampStr.endsWith("Z")) {
+                    timestamp = ZonedDateTime.parse(timestampStr).toLocalDateTime();
+                } else {
+                    // Fallback to original parsing
+                    timestamp = LocalDateTime.parse(timestampStr, DateTimeFormatter.ISO_DATE_TIME);
+                }
+                
+            } catch (Exception e) {
+                System.err.println("⚠️ Failed to parse timestamp: " + postNode.get("timestamp").asText());
+                // Use current time as fallback
+                timestamp = LocalDateTime.now();
+            }
+        }
+
+        return new SocialMediaPost(
+                postId,
+                "instagram",
+                caption,
+                mediaUrl,
+                likes,
+                comments,
+                0, // Instagram doesn't have direct shares metric
+                timestamp,
+                username,
+                "" // profile pic placeholder
+        );
+    }
+
+    private List<SocialMediaPost> fetchHashtagPosts(String hashtagId, String token, int maxResults) throws Exception {
+        String mediaUrl = String.format("%s/%s/recent_media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count&limit=%d&access_token=%s",
+                config.getUrl(), hashtagId, maxResults, token);
+
+        ResponseEntity<String> mediaResponse = restTemplate.getForEntity(mediaUrl, String.class);
+        JsonNode mediaData = objectMapper.readTree(mediaResponse.getBody());
+
         List<SocialMediaPost> posts = new ArrayList<>();
-        DateTimeFormatter formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
-
-        for (int i = 0; i < postsArray.length() && i < postLimit; i++) {
-            JSONObject post = postsArray.getJSONObject(i);
-
-            String mediaUrl = post.optString("media_url", post.optString("thumbnail_url", ""));
-            OffsetDateTime createdAt = OffsetDateTime.parse(
-                    post.optString("timestamp", OffsetDateTime.now().toString()),
-                    formatter);
-
-            posts.add(new SocialMediaPost(
-                    post.optString("id", ""),
-                    "Instagram",
-                    post.optString("caption", ""),
-                    mediaUrl,
-                    post.optInt("like_count", 0),
-                    post.optInt("comments_count", 0),
-                    0,
-                    createdAt.toLocalDateTime(),
-                    "", "" // Optional fields
-            ));
+        if (mediaData.has("data")) {
+            for (JsonNode post : mediaData.get("data")) {
+                posts.add(parsePostData(post, "hashtag_search"));
+            }
         }
 
         return posts;
     }
 
-    /**
-     * Core API request handler with HTTP error logging
-     */
-    @SuppressWarnings("LoggerStringConcat")
-    private String makeApiRequest(String url) throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.setHeader("Accept", "application/json");
+    private RuntimeException handleHttpError(HttpClientErrorException e, String context, String operation) {
+        String errorBody = e.getResponseBodyAsString();
+        HttpStatus status = e.getStatusCode();
 
-        try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            HttpEntity entity = response.getEntity();
-            String body = EntityUtils.toString(entity);
+        System.err.println("📡 Instagram API HTTP Error for " + operation + " (context: " + context + "): " + status + " - " + errorBody);
 
-            // Handle common errors
-            if (statusCode >= 400) {
-                logger.warning("API Error [" + statusCode + "]: " + body);
-                throw new IOException("API request failed: " + statusCode + " - " + body);
-            }
+        if (errorBody.contains("API access blocked") ||
+                errorBody.contains("OAuthException") ||
+                status == HttpStatus.UNAUTHORIZED) {
 
-            return body;
+            return new RuntimeException("Instagram API access denied for " + operation + ". Your access token may be invalid, expired, or lack required permissions. HTTP " + status + ": " + errorBody);
+
+        } else if (status == HttpStatus.FORBIDDEN) {
+            return new RuntimeException("Instagram API access forbidden for " + operation + ". This may require app review or additional permissions. HTTP " + status + ": " + errorBody);
+
+        } else if (status == HttpStatus.TOO_MANY_REQUESTS) {
+            return new RuntimeException("Instagram API rate limit exceeded for " + operation + ". Please wait before making more requests. HTTP " + status + ": " + errorBody);
+
+        } else if (status == HttpStatus.NOT_FOUND) {
+            return new RuntimeException("Instagram resource not found for " + operation + " (context: " + context + "). Please verify the username/query is correct. HTTP " + status + ": " + errorBody);
+
+        } else if (status == HttpStatus.BAD_REQUEST) {
+            return new RuntimeException("Invalid request for Instagram " + operation + " (context: " + context + "). Please check your parameters. HTTP " + status + ": " + errorBody);
+
+        } else {
+            return new RuntimeException("Instagram API error for " + operation + " (context: " + context + "). HTTP " + status + ": " + errorBody);
         }
     }
 
-    /**
-     * Use case: Return mock stats when API fails or user not found
-     */
-    private SocialMediaStats createDummyInstagramStats(String username) {
-        List<SocialMediaPost> dummyPosts = new ArrayList<>();
-        dummyPosts.add(new SocialMediaPost(
-                "1", "Instagram", "Example post 🌅",
-                "https://example.com/sunset.jpg", 150, 10, 0,
-                OffsetDateTime.now().minusHours(2).toLocalDateTime(), username, ""));
-        dummyPosts.add(new SocialMediaPost(
-                "2", "Instagram", "Sample coffee post ☕",
-                "https://example.com/coffee.jpg", 95, 7, 0,
-                OffsetDateTime.now().minusHours(5).toLocalDateTime(), username, ""));
-
-        return new SocialMediaStats(
-                "Instagram", username, 1234, 567, 42, 245, 17, 0, 2.3,
-                OffsetDateTime.now().toLocalDateTime(), dummyPosts);
+    private static class EngagementMetrics {
+        int totalLikes = 0;
+        int totalComments = 0;
+        int totalShares = 0;
     }
 
-    /**
-     * Cleanup HTTP resources
-     */
-    @SuppressWarnings("LoggerStringConcat")
-    public void close() {
-        try {
-            if (httpClient != null) {
-                httpClient.close();
-            }
-        } catch (IOException e) {
-            logger.warning("Error closing HTTP client: " + e.getMessage());
+    private EngagementMetrics calculateEngagementMetrics(List<SocialMediaPost> posts) {
+        EngagementMetrics metrics = new EngagementMetrics();
+        for (SocialMediaPost post : posts) {
+            metrics.totalLikes += post.getLikes();
+            metrics.totalComments += post.getComments();
+            metrics.totalShares += post.getShares();
         }
+        return metrics;
     }
 
-    /**
-     * FIXED: Implements fetchStatsForUser using dummy data
-     */
-    public SocialMediaStats fetchStatsForUser(String username) {
-        String pageId = lookupPageIdForUsername(username); // You must implement this
-        if (pageId == null) {
-            return createDummyInstagramStats(username); // fallback
-        }
-        return fetchUserStatsFromPageId(pageId); // fetch real stats
+    private double calculateEngagementRate(EngagementMetrics metrics, int followers, int postsCount) {
+        if (followers <= 0 || postsCount <= 0) return 0.0;
+        return ((double)(metrics.totalLikes + metrics.totalComments) / (followers * postsCount)) * 100;
     }
 
-    private String lookupPageIdForUsername(String username) {
-        // TODO: Replace with real lookup logic (e.g., database or API call)
-        logger.log(Level.INFO, "Looking up page ID for Instagram username: {0}", username);
-        // For now, always return a dummy page ID for testing
-        return "DUMMY_PAGE_ID";
+    // Public service status methods
+    public String getServiceStatus() {
+        return config.getConfigStatus();
     }
 
-    /**
-     * FIXED: Implements searchPosts using dummy posts
-     */
-    public List<SocialMediaPost> searchPosts(String query, int limit) {
-        logger.log(Level.INFO, "Searching Instagram posts for query: {0}", query);
-        List<SocialMediaPost> allPosts = createDummyInstagramStats("search").getRecentPosts();
-        List<SocialMediaPost> filtered = new ArrayList<>();
-        for (SocialMediaPost post : allPosts) {
-            if (post.getContent().toLowerCase().contains(query.toLowerCase())) {
-                filtered.add(post);
-            }
-            if (filtered.size() >= limit)
-                break;
-        }
-        return filtered;
+    public boolean isConfigured() {
+        return config.hasValidAccessToken();
     }
 }

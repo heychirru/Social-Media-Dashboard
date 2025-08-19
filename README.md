@@ -1,324 +1,241 @@
-# Social Media Dashboard
+# 🚀 Social Media Dashboard
 
-## Overview
-The Social Media Dashboard is a comprehensive Java application that provides **three different interfaces** for analyzing Instagram and Twitter/X social media data:
+A comprehensive Java application for analyzing Instagram 📸 data via Web 🌐, Desktop 🖥️, and REST API 🔌 interfaces.
 
-1. **🌐 Web Application** - Modern web interface with responsive design
-2. **🖥️ Desktop Application** - Native JavaFX desktop application
-3. **🔌 REST API** - Full-featured REST API for integration
 
-## 🚀 Features
+---
 
-### Core Features
-- **Instagram Integration**: Fetch user profiles, posts, and engagement metrics using Instagram Graph API
-- **Cross-Platform Analytics**: Aggregate data from multiple platforms for comprehensive insights
-- **Search Functionality**: Search for posts and tweets across platforms
-- **Real-time Data**: Get up-to-date statistics and recent posts
-- **Demo Mode**: Test all applications with dummy data without API keys
+## 📑 Table of Contents
 
-### Web Application Features
-- **Responsive Design**: Works on desktop, tablet, and mobile devices
-- **Modern UI**: Built with Bootstrap 5 and Font Awesome icons
-- **Interactive Charts**: Visual data representation
-- **Real-time Updates**: Live data fetching and display
-- **Search Interface**: User-friendly search across platforms
+* [👀 Overview](#overview)
+* [✨ Features](#features)
+* [📂 Project Structure](#project-structure)
+* [⚙️ Setup Instructions](#setup-instructions)
+* [🔑 API Keys & Environment Variables](#api-keys--environment-variables)
+* [▶️ Running Applications](#running-applications)
+* [📡 REST API Documentation](#rest-api-documentation)
+* [💻 Web & Desktop Usage](#web--desktop-usage)
+* [❗ Error Handling](#error-handling)
+* [📦 Dependencies](#dependencies)
+* [⚡ Quick Start](#quick-start)
+* [🤝 Contributing](#contributing)
+* [📜 License](#license)
 
-### Desktop Application Features
-- **Native Interface**: JavaFX-based desktop application
-- **Tabbed Interface**: Organized data presentation
-- **Charts and Graphs**: Built-in data visualization
-- **Offline Capability**: Works without internet connection (with cached data)
-- **Keyboard Shortcuts**: Quick access to features
+---
 
-### REST API Features
-- **RESTful Design**: Standard HTTP methods and status codes
-- **JSON Responses**: Structured data format
-- **CORS Support**: Cross-origin resource sharing enabled
-- **Error Handling**: Comprehensive error responses
-- **Health Checks**: API status monitoring endpoints
+## 👀 Overview
 
-## 📁 Project Structure
-```
+**Social Media Dashboard** provides:
+
+* 🌐 Web Application (responsive UI)
+* 🖥️ Desktop Application (JavaFX)
+* 🔌 REST API (integration-ready)
+
+---
+
+## ✨ Features
+
+### 🔧 Core
+
+* 📸 Instagram
+* 🔍 Search posts
+* 📊 Real-time stats
+
+### 🌐 Web
+
+* 📱 Responsive, modern UI
+* 📈 Interactive charts
+* 🔄 Live updates
+
+### 🖥️ Desktop
+
+* 🖼️ Native JavaFX UI
+* 🗂️ Tabbed interface
+* 📥 Offline/cached data
+
+### 🔌 REST API
+
+* 🌍 RESTFUL endpoints
+* 📦 JSON responses
+* 🔒 CORS & error handling
+* ❤️ Health checks
+
+---
+
+## 📂 Project Structure
+
+```text
 social-media-dashboard/
-├── src/main/java/com/example/dashboard/
-│   ├── App.java                          # Main application launcher
-│   ├── api/
-│   │   ├── SocialMediaApiService.java    # Unified API service
-│   │   ├── InstagramApiService.java      # Instagram API integration
-│   │   └── TwitterApiService.java        # Twitter/X API integration
-│   ├── controller/
-│   │   ├── ApiController.java            # REST API endpoints
-│   │   └── WebController.java            # Web application controllers
-│   ├── desktop/
-│   │   └── DesktopApplication.java       # JavaFX desktop application
-│   ├── config/
-│   │   └── ApiConfig.java                # Configuration management
-│   ├── model/
-│   │   ├── UserProfile.java              # User profile model
-│   │   ├── SocialMediaPost.java          # Post/tweet model
-│   │   └── SocialMediaStats.java         # Statistics model
-│   └── demo/
-│       └── SocialMediaDemo.java          # Demo application
-├── src/main/resources/
-│   ├── templates/                        # Thymeleaf HTML templates
-│   │   ├── index.html                    # Home page
-│   │   ├── dashboard.html                # Dashboard page
-│   │   └── ...
-│   └── application.properties            # Spring Boot configuration
-├── config.properties.example             # API configuration template
-└── pom.xml                              # Maven dependencies
+├── pom.xml                        # Maven configuration
+├── config.properties.example      # Example config file for API keys
+├── src/
+│   ├── main/
+│   │   ├── java/com/example/dashboard/
+│   │   │   ├── App.java
+│   │   │   ├── api/
+│   │   │   │   ├── SocialMediaApiService.java
+│   │   │   │   ├── InstagramApiService.java
+│   │   │   ├── controller/
+│   │   │   │   ├── ApiController.java
+│   │   │   │   └── WebController.java
+│   │   │   ├── desktop/
+│   │   │   │   └── DesktopApplication.java
+│   │   │   ├── config/
+│   │   │   │   └── ApiConfig.java
+│   │   │   ├── model/
+│   │   │   │   ├── UserProfile.java
+│   │   │   │   ├── SocialMediaPost.java
+│   │   │   │   └── SocialMediaStats.java
+│   │   └── resources/
+│   │       ├── templates/
+│   │       │   ├── index.html
+│   │       │   ├── dashboard.html
+│   │       │   └── ...
+│   │       ├── application.properties
+│   │       └── static/            # CSS, JS, images
+│   └── test/java/com/example/dashboard/
+│       └── AppTest.java           # Unit tests
+└── README.md
 ```
 
-## 🛠️ Setup Instructions
+---
 
-### Prerequisites
-- Java 8 or higher
-- Maven 3.6 or higher
-- Git
+## ⚙️ Setup Instructions
 
-### 1. Clone and Build
+### ✅ Prerequisites
+
+* ☕ Java 8+
+* 📦 Maven 3.6+
+* 🌀 Git
+
+### 📥 Clone & Build
+
 ```bash
 git clone <repository-url>
 cd social-media-dashboard
 mvn clean install
 ```
 
-### 2. Configure API Keys
+---
 
-**Option A: Configuration File**
+## 🔑 API Keys & Environment Variables
+
+### 🔧 Configure API Keys
+
+**Option 1: config.properties**
+
 ```bash
 cp config.properties.example config.properties
-# Edit config.properties and add your API keys
+# Edit config.properties and add your API keys 🔑
 ```
 
-**Option B: Environment Variables**
-```bash
-export INSTAGRAM_ACCESS_TOKEN="your_instagram_token_here"
-```
+---
 
-### 3. Run Applications
+## ▶️ Running Applications
 
-#### Web Application
+### 🌐 Web Application
+
 ```bash
-# Start web application (default)
 mvn spring-boot:run
-
-# Or with specific mode
+# or
 java -jar target/social-media-dashboard-1.0-SNAPSHOT.jar web
 ```
-**Access at:** http://localhost:8080
 
-#### Desktop Application
+👉 Access: [http://localhost:8080](http://localhost:8080)
+
+---
+
+### 🖥️ Desktop Application
+
 ```bash
-# Start desktop application
 java -jar target/social-media-dashboard-1.0-SNAPSHOT.jar desktop
-
-# Or run directly
+# or
 mvn exec:java -Dexec.mainClass="com.example.dashboard.desktop.DesktopApplication"
 ```
 
-#### REST API Server
-```bash
-# Start API server only
-java -jar target/social-media-dashboard-1.0-SNAPSHOT.jar api
+---
 
-# Or run with Spring Boot
+### 📡 REST API Server
+
+```bash
+java -jar target/social-media-dashboard-1.0-SNAPSHOT.jar api
+# or
 mvn spring-boot:run -Dspring.profiles.active=api
 ```
-**API Base URL:** http://localhost:8080/api/v1
 
-#### Demo Mode
-```bash
-# Run demo with console output
-java -jar target/social-media-dashboard-1.0-SNAPSHOT.jar demo
+🌍 API Base URL: [http://localhost:8080/api/v1](http://localhost:8080/api/v1)
 
-# Or run demo class directly
-mvn exec:java -Dexec.mainClass="com.example.dashboard.demo.SocialMediaDemo"
-```
+---
 
-## 🔌 REST API Documentation
+## 📡 REST API Documentation
 
-### Base URL
-```
-http://localhost:8080/api/v1
-```
+### 📍 Endpoints
 
-### Endpoints
+* **📊 User Statistics:** `GET /api/v1/stats/{username}`
+* **🗂️ Platform Data:** `GET /api/v1/platforms/{username}` or `GET /api/v1/platforms/{platform}/{username}`
+* **🔍 Search:** `GET /api/v1/search?query={search_term}&maxResults={number}`
+* **📝 Recent Posts:** `GET /api/v1/platforms/{platform}/{username}/posts?limit={number}`
+* **❤️ Health & Config:** `GET /api/v1/health`, `GET /api/v1/config`
 
-#### User Statistics
-```http
-GET /api/v1/stats/{username}
-```
-Returns aggregated statistics across all platforms.
+---
 
-#### Platform Data
-```http
-GET /api/v1/platforms/{username}
-GET /api/v1/platforms/{platform}/{username}
-```
-Returns data from all platforms or a specific platform.
+## 💻 Web & Desktop Usage
 
-#### Search
-```http
-GET /api/v1/search?query={search_term}&maxResults={number}
-```
-Search for posts/tweets across platforms.
+### 🌐 Web
 
-#### Recent Posts
-```http
-GET /api/v1/platforms/{platform}/{username}/posts?limit={number}
-```
-Get recent posts from a specific platform.
+1. 🔗 Open [http://localhost:8080](http://localhost:8080)
+2. 👤 Enter username
+3. 📊 View dashboard: stats, analytics, posts, charts
 
-#### Health & Configuration
-```http
-GET /api/v1/health
-GET /api/v1/config
-```
-Check API status and configuration.
+### 🖥️ Desktop
 
-### Example API Usage
-```bash
-# Get user stats
-curl http://localhost:8080/api/v1/stats/example_user
+1. ▶️ Launch app
+2. 👤 Enter username
+3. 🔎 Click "Analyze"
+4. 🗂️ Use tabs for overview, platform details, posts, charts
 
-# Search for posts
-curl "http://localhost:8080/api/v1/search?query=tech&maxResults=10"
+---
 
-# Get Instagram data
-curl http://localhost:8080/api/v1/platforms/Instagram/example_user
-```
+## ❗ Error Handling
 
-## 🖥️ Desktop Application Usage
+* ✅ Graceful fallback to demo data
+* 📝 Detailed logging
+* 💡 User-friendly error messages
+* 🔄 Retry for transient failures
 
-1. **Launch the application**
-2. **Enter username** in the input field
-3. **Click "Analyze"** to fetch user data
-4. **Use tabs** to view different data sections:
-   - **Overview**: Aggregated statistics
-   - **Platform Details**: Platform-specific data
-   - **Recent Posts**: Latest posts and tweets
-   - **Charts**: Visual data representation
-
-## 🌐 Web Application Usage
-
-1. **Open browser** and navigate to http://localhost:8080
-2. **Enter username** in the search form
-3. **View comprehensive dashboard** with:
-   - Aggregated statistics
-   - Platform-specific analytics
-   - Recent posts and engagement metrics
-   - Interactive charts and graphs
-
-## 🔧 API Setup
-
-### Instagram API Setup
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create a new app or use an existing one
-3. Add Instagram Basic Display product to your app
-4. Generate an Instagram Graph API access token
-5. Add the token to your configuration
-
-## 📊 Demo Mode
-
-All applications work in **Demo Mode** without API keys:
-- Uses realistic sample data
-- Perfect for testing and demonstration
-- No API setup required
-- Shows all features and functionality
-
-   ```
-
-## Environment Variables
-Set these environment variables:
-```bash
-# Windows (PowerShell)
-$env:INSTAGRAM_ACCESS_TOKEN="your_instagram_token"
-$env:TWITTER_BEARER_TOKEN="your_twitter_token"
-
-# Windows (Command Prompt)
-set INSTAGRAM_ACCESS_TOKEN=your_instagram_token
-set TWITTER_BEARER_TOKEN=your_twitter_token
-
-# Linux/Mac
-export INSTAGRAM_ACCESS_TOKEN="your_instagram_token"
-export TWITTER_BEARER_TOKEN="your_twitter_token"
-```
-
-#### Method 3: Use Helper Scripts
-Run the provided helper scripts:
-```bash
-# Windows
-turn_off_demo.bat
-# or
-powershell -ExecutionPolicy Bypass -File turn_off_demo.ps1
-```
-
-#### Getting API Tokens
-
-**Instagram Graph API Access Token:**
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create a new app or use an existing one
-3. Add Instagram Basic Display product to your app
-4. Generate an Instagram Graph API access token
-5. Add the token to your configuration
-
-
-#### Verification
-After setting up real tokens:
-- Restart your application
-- The demo mode indicator should disappear
-- You'll see real data from social media platforms
-- Check the configuration page at `/config` to verify token status
-
-## 🛡️ Error Handling
-
-- **Graceful Fallbacks**: Automatic fallback to demo data
-- **Comprehensive Logging**: Detailed error tracking
-- **User-Friendly Messages**: Clear error explanations
-- **Retry Mechanisms**: Automatic retry for transient failures
+---
 
 ## 📦 Dependencies
 
-### Core Dependencies
-- **Spring Boot 2.5.4**: Application framework
-- **Apache HttpClient**: HTTP client for API requests
-- **JSON**: JSON parsing and manipulation
-- **Jackson**: JSON serialization/deserialization
+* ⚡ Spring Boot
+* 🌐 Apache HttpClient
+* 🔄 Jackson
+* 🎨 Thymeleaf, Bootstrap, Font Awesome (Web)
+* 🖼️ JavaFX (Desktop)
+* 🗄️ H2 Database, Spring Data JPA (Database)
 
-### Web Application
-- **Thymeleaf**: Template engine
-- **Bootstrap 5**: CSS framework
-- **Font Awesome**: Icons
+---
 
-### Desktop Application
-- **JavaFX 16**: Desktop UI framework
-- **JavaFX Charts**: Data visualization
-
-### Database
-- **H2 Database**: In-memory database
-- **Spring Data JPA**: Data access layer
-
-## 🚀 Quick Start
+## ⚡ Quick Start
 
 ```bash
-# 1. Clone and build
 git clone <repository-url>
 cd social-media-dashboard
 mvn clean install
-
-# 2. Run web application (demo mode)
 mvn spring-boot:run
-
-# 3. Open browser
-# Navigate to: http://localhost:8080
-# Enter any username to see demo data
+# 🚀 Open http://localhost:8080 and enter any username for demo data
 ```
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please submit a pull request or open an issue for any enhancements or bug fixes.
+Contributions welcome! Submit a PR 📬 or open an issue 🐞.
+Feel Free 😊👨‍💻
 
-## 📄 License
+![Thanks](https://tenor.com/en-IN/view/the-office-michael-scott-thank-you-bow-steve-carell-gif-5009516783019270794)
+---
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+## 📜 License
+
+📄 Apache License. See LICENSE.

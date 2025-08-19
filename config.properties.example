@@ -1,14 +1,19 @@
-# Social Media Dashboard API Configuration
-# Copy this file to config.properties and fill in your actual API keys
+# Database Configuration
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=password
+spring.h2.console.enabled=true
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=create-drop
 
-# Instagram Graph API Access Token
-# Get this from: https://developers.facebook.com/docs/instagram-basic-display-api/getting-started
-instagram.access.token=your_instagram_access_token_here
+# Error Handling
+server.error.include-message=always
+server.error.include-binding-errors=always
+server.error.include-stacktrace=on_param
 
-# Twitter API v2 Bearer Token
-# Get this from: https://developer.twitter.com/en/portal/dashboard
-twitter.bearer.token=your_twitter_bearer_token_here
-
-# Note: You can also set these as environment variables:
-# INSTAGRAM_ACCESS_TOKEN=your_token_here
-# TWITTER_BEARER_TOKEN=your_token_here 
+# Social Media API Configuration
+social.api.url=https://graph.instagram.com/v23.0
+social.api.token=$ {ADD YOUR TOKEN HERE}
+# Server Configuration
+server.port=8080

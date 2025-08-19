@@ -1,103 +1,112 @@
 package com.example.dashboard.api;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+import com.example.dashboard.model.SocialMediaPost;
+import com.example.dashboard.model.SocialMediaStats;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import com.example.dashboard.model.SocialMediaPost;
-import com.example.dashboard.model.SocialMediaStats;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-/**
- * Central service to fetch data from all social platforms.
- * Currently supports Instagram Business accounts via Facebook Page ID.
- */
 @Service
 public class SocialMediaApiService {
 
-    private static final Logger logger = Logger.getLogger(SocialMediaApiService.class.getName());
-
     private final InstagramApiService instagramApiService;
-    // Removed unused apiUrl field
 
-    /**
-     * Constructor with injected configuration values.
-     *
-     * @param instagramAccessToken Injected from application properties
-     * @param apiUrl               Injected from application properties
-     */
-    public SocialMediaApiService(
-            @Value("${social.api.token}") String instagramAccessToken,
-            @Value("${social.api.url}") String apiUrl) {
+    @Value("${instagram.api.access-token:}")
+    private String instagramAccessToken;
 
-        this.instagramApiService = new InstagramApiService(instagramAccessToken);
+    @Autowired
+    public SocialMediaApiService(InstagramApiService instagramApiService) {
+        this.instagramApiService = instagramApiService;
     }
 
-    // Fetch stats for all platforms (currently Instagram only)
-    public Map<String, SocialMediaStats> fetchAllPlatformData(String username) {
-        Map<String, SocialMediaStats> allStats = new HashMap<>();
+    public Map<String, Object> getAggregatedStats(String username) throws RuntimeException {
+        Map<String, Object> stats = new HashMap<>();
+
         try {
-            SocialMediaStats instagramStats = instagramApiService.fetchStatsForUser(username);
-            allStats.put("Instagram", instagramStats);
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, "Failed to fetch Instagram stats", e);
+            SocialMediaStats instagramStats = fetchPlatformData("instagram", username);
+            stats.put("instagram", instagramStats);
+            stats.put("totalFollowers", instagramStats.getFollowers());
+            stats.put("totalPosts", instagramStats.getTotalPosts());
+            stats.put("engagementRate", String.format("%.1f%%", instagramStats.getEngagementRate()));
+            stats.put("totalLikes", instagramStats.getTotalLikes());
+            stats.put("totalComments", instagramStats.getTotalComments());
+
+            return stats;
+
+        } catch (RuntimeException e) {
+            System.err.println("Error getting aggregated stats for " + username + ": " + e.getMessage());
+            throw new RuntimeException("Failed to get aggregated social media stats for user '" + username + "': " + e.getMessage(), e);
         }
-        return allStats;
     }
 
-    // Aggregated stats for overview tab
-    public Map<String, Object> getAggregatedStats(String username) {
-        Map<String, SocialMediaStats> statsMap = fetchAllPlatformData(username);
-        Map<String, Object> aggregated = new HashMap<>();
-        int totalFollowers = 0, totalPosts = 0, totalLikes = 0, totalComments = 0, totalShares = 0;
-        double totalEngagement = 0.0;
-        int count = 0;
-        for (SocialMediaStats stats : statsMap.values()) {
-            totalFollowers += stats.getFollowers();
-            totalPosts += stats.getTotalPosts();
-            totalLikes += stats.getTotalLikes();
-            totalComments += stats.getTotalComments();
-            totalShares += stats.getTotalShares();
-            totalEngagement += stats.getEngagementRate();
-            count++;
+    public Map<String, SocialMediaStats> fetchAllPlatformData(String username) throws RuntimeException {
+        Map<String, SocialMediaStats> data = new HashMap<>();
+
+        try {
+            data.put("instagram", fetchPlatformData("instagram", username));
+            return data;
+
+        } catch (RuntimeException e) {
+            System.err.println("Error fetching all platform data for " + username + ": " + e.getMessage());
+            throw new RuntimeException("Failed to fetch platform data for user '" + username + "': " + e.getMessage(), e);
         }
-        aggregated.put("totalFollowers", totalFollowers);
-        aggregated.put("totalPosts", totalPosts);
-        aggregated.put("totalLikes", totalLikes);
-        aggregated.put("totalComments", totalComments);
-        aggregated.put("totalShares", totalShares);
-        aggregated.put("averageEngagementRate", count > 0 ? totalEngagement / count : 0.0);
-        return aggregated;
     }
 
-    // Search posts across platforms
-    public Map<String, List<SocialMediaPost>> searchAcrossPlatforms(String query, int limit) {
+    public SocialMediaStats fetchPlatformData(String platform, String username) throws RuntimeException {
+        if (!"instagram".equalsIgnoreCase(platform)) {
+            throw new UnsupportedOperationException("Platform '" + platform + "' is not supported. Currently supported platforms: instagram");
+        }
+
+        try {
+            return instagramApiService.fetchProfileStats(username, instagramAccessToken);
+        } catch (RuntimeException e) {
+            System.err.println("Error fetching " + platform + " platform data for " + username + ": " + e.getMessage());
+            throw new RuntimeException("Failed to fetch " + platform + " data for user '" + username + "': " + e.getMessage(), e);
+        }
+    }
+
+    public Map<String, List<SocialMediaPost>> searchAcrossPlatforms(String query, int maxResults) throws RuntimeException {
         Map<String, List<SocialMediaPost>> results = new HashMap<>();
+
         try {
-            List<SocialMediaPost> instagramPosts = instagramApiService.searchPosts(query, limit);
-            results.put("Instagram", instagramPosts);
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, "Failed to search Instagram posts", e);
-        }
-        return results;
-    }
+            List<SocialMediaPost> instagramResults = instagramApiService.searchPosts(query, instagramAccessToken, maxResults);
+            results.put("instagram", instagramResults);
+            return results;
 
-    // Fetch data from a specific platform
-    public SocialMediaStats fetchPlatformData(String platform, String username) {
-        switch (platform.toLowerCase()) {
-            case "instagram":
-                return instagramApiService.fetchStatsForUser(username);
-            default:
-                throw new UnsupportedOperationException("Platform not supported: " + platform);
+        } catch (RuntimeException e) {
+            System.err.println("Error searching across platforms for query '" + query + "': " + e.getMessage());
+            throw new RuntimeException("Failed to search for posts with query '" + query + "': " + e.getMessage(), e);
         }
     }
 
-    // Cleanup all API clients
-    public void close() {
-        instagramApiService.close();
+    public SocialMediaStats fetchInstagramProfile(String username) throws RuntimeException {
+        try {
+            return instagramApiService.fetchProfileStats(username, instagramAccessToken);
+        } catch (RuntimeException e) {
+            System.err.println("Error fetching Instagram profile for username: " + username + " - " + e.getMessage());
+            throw new RuntimeException("Failed to fetch Instagram profile for user '" + username + "': " + e.getMessage(), e);
+        }
+    }
+
+    public List<SocialMediaPost> fetchInstagramPosts(String username) throws RuntimeException {
+        try {
+            return instagramApiService.fetchRecentPosts(username, instagramAccessToken);
+        } catch (RuntimeException e) {
+            System.err.println("Error fetching Instagram posts for username: " + username + " - " + e.getMessage());
+            throw new RuntimeException("Failed to fetch Instagram posts for user '" + username + "': " + e.getMessage(), e);
+        }
+    }
+
+    // Service status methods
+    public boolean isInstagramConfigured() {
+        return instagramApiService.isConfigured();
+    }
+
+    public String getInstagramStatus() {
+        return instagramApiService.getServiceStatus();
     }
 }
