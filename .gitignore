@@ -28,5 +28,5 @@ build
 config.properties
 
 /.metadata/
-**/Servers
-Servers
+**/Servers/
+Servers/

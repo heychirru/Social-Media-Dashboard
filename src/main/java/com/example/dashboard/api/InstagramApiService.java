@@ -24,6 +24,10 @@ public class InstagramApiService {
     private final InstagramConfig config;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    
+    // Cache for authenticated user info to avoid repeated API calls
+    private String authenticatedUserId = null;
+    private String authenticatedUsername = null;
 
     @Autowired
     public InstagramApiService(InstagramConfig config) {
@@ -38,9 +42,25 @@ public class InstagramApiService {
         String token = getValidToken(accessToken);
 
         try {
-            String userId = getUserIdFromUsername(username, token);
+            // Get authenticated user info
+            AuthenticatedUserInfo userInfo = getAuthenticatedUserInfo(token);
+            
+            // Check if requested username matches authenticated user
+            if (!userInfo.username.equalsIgnoreCase(username)) {
+                System.out.println("⚠️ Warning: Instagram Basic Display API limitation - requested username '" + 
+                                 username + "' but can only return data for authenticated user '" + 
+                                 userInfo.username + "'");
+                
+                // Throw an exception explaining the limitation
+                throw new RuntimeException("Instagram Basic Display API can only access data for the authenticated user '" + 
+                                         userInfo.username + "'. Requested user '" + username + "' is not accessible. " +
+                                         "This is a limitation of Instagram Basic Display API - it only provides access to the token owner's data.");
+            }
 
-            // Fetch profile data
+            String userId = userInfo.userId;
+            String actualUsername = userInfo.username;
+
+            // Fetch profile data using the authenticated user's ID
             String profileUrl = String.format("%s/%s?fields=id,username,account_type,media_count,followers_count,follows_count&access_token=%s",
                     config.getUrl(), userId, token);
 
@@ -48,7 +68,7 @@ public class InstagramApiService {
             JsonNode profileData = objectMapper.readTree(response.getBody());
 
             // Fetch recent posts for engagement metrics
-            List<SocialMediaPost> recentPosts = fetchRecentPosts(username, token);
+            List<SocialMediaPost> recentPosts = fetchRecentPosts(actualUsername, token);
 
             // Calculate engagement metrics
             EngagementMetrics metrics = calculateEngagementMetrics(recentPosts);
@@ -62,11 +82,11 @@ public class InstagramApiService {
 
             double engagementRate = calculateEngagementRate(metrics, followersCount, recentPosts.size());
 
-            System.out.println("✅ Successfully fetched Instagram data for: " + username);
+            System.out.println("✅ Successfully fetched Instagram data for: " + actualUsername);
 
             return new SocialMediaStats(
                     profileData.get("id").asText(),
-                    profileData.get("username").asText(),
+                    profileData.get("username").asText(), // Use actual username from API
                     followersCount,
                     followingCount,
                     postsCount,
@@ -93,9 +113,25 @@ public class InstagramApiService {
         String token = getValidToken(accessToken);
 
         try {
-            String userId = getUserIdFromUsername(username, token);
+            // Get authenticated user info
+            AuthenticatedUserInfo userInfo = getAuthenticatedUserInfo(token);
+            
+            // Check if requested username matches authenticated user
+            if (!userInfo.username.equalsIgnoreCase(username)) {
+                System.out.println("⚠️ Warning: Instagram Basic Display API limitation - requested username '" + 
+                                 username + "' but can only return posts for authenticated user '" + 
+                                 userInfo.username + "'");
+                
+                // Throw an exception explaining the limitation
+                throw new RuntimeException("Instagram Basic Display API can only access posts for the authenticated user '" + 
+                                         userInfo.username + "'. Requested user '" + username + "' is not accessible. " +
+                                         "This is a limitation of Instagram Basic Display API.");
+            }
 
-            // Fetch recent media
+            String userId = userInfo.userId;
+            String actualUsername = userInfo.username;
+
+            // Fetch recent media using authenticated user's ID
             String mediaUrl = String.format("%s/%s/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count&limit=25&access_token=%s",
                     config.getUrl(), userId, token);
 
@@ -106,11 +142,11 @@ public class InstagramApiService {
 
             if (mediaData.has("data") && mediaData.get("data").isArray()) {
                 for (JsonNode post : mediaData.get("data")) {
-                    posts.add(parsePostData(post, username));
+                    posts.add(parsePostData(post, actualUsername)); // Use actual username
                 }
             }
 
-            System.out.println("✅ Successfully fetched " + posts.size() + " Instagram posts for: " + username);
+            System.out.println("✅ Successfully fetched " + posts.size() + " Instagram posts for: " + actualUsername);
             return posts;
 
         } catch (HttpClientErrorException e) {
@@ -185,23 +221,34 @@ public class InstagramApiService {
                 token.length() > 20; // Basic length check
     }
 
-    private String getUserIdFromUsername(String username, String token) throws Exception {
-        // If username is already an ID (numeric), return it
-        if (username.matches("\\d+")) {
-            return username;
+    /**
+     * Get authenticated user information and cache it
+     */
+    private AuthenticatedUserInfo getAuthenticatedUserInfo(String token) throws Exception {
+        // Return cached info if available
+        if (authenticatedUserId != null && authenticatedUsername != null) {
+            return new AuthenticatedUserInfo(authenticatedUserId, authenticatedUsername);
         }
 
-        // For Instagram Basic Display API, you typically use 'me' endpoint
-        String searchUrl = String.format("%s/me?fields=id,username&access_token=%s", config.getUrl(), token);
+        // Fetch authenticated user info using /me endpoint
+        String meUrl = String.format("%s/me?fields=id,username&access_token=%s", config.getUrl(), token);
 
         try {
-            ResponseEntity<String> response = restTemplate.getForEntity(searchUrl, String.class);
+            ResponseEntity<String> response = restTemplate.getForEntity(meUrl, String.class);
             JsonNode userData = objectMapper.readTree(response.getBody());
-            return userData.get("id").asText();
+            
+            // Cache the results
+            authenticatedUserId = userData.get("id").asText();
+            authenticatedUsername = userData.get("username").asText();
+            
+            System.out.println("📍 Authenticated Instagram user: " + authenticatedUsername + " (ID: " + authenticatedUserId + ")");
+            
+            return new AuthenticatedUserInfo(authenticatedUserId, authenticatedUsername);
+            
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
-            System.err.println("❌ Error resolving username " + username + " to user ID: " + errorBody);
-            throw new RuntimeException("Unable to resolve username '" + username + "' to user ID. HTTP " + e.getStatusCode() + ": " + errorBody, e);
+            System.err.println("❌ Error fetching authenticated user info: " + errorBody);
+            throw new RuntimeException("Unable to fetch authenticated user information. HTTP " + e.getStatusCode() + ": " + errorBody, e);
         }
     }
 
@@ -299,6 +346,17 @@ public class InstagramApiService {
         }
     }
 
+    // Helper class for authenticated user info
+    private static class AuthenticatedUserInfo {
+        final String userId;
+        final String username;
+        
+        AuthenticatedUserInfo(String userId, String username) {
+            this.userId = userId;
+            this.username = username;
+        }
+    }
+
     private static class EngagementMetrics {
         int totalLikes = 0;
         int totalComments = 0;
@@ -327,5 +385,26 @@ public class InstagramApiService {
 
     public boolean isConfigured() {
         return config.hasValidAccessToken();
+    }
+
+    /**
+     * Get the authenticated user's username (who owns the access token)
+     */
+    public String getAuthenticatedUsername(String accessToken) {
+        try {
+            String token = getValidToken(accessToken);
+            AuthenticatedUserInfo userInfo = getAuthenticatedUserInfo(token);
+            return userInfo.username;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Clear cached authenticated user info (call this if token changes)
+     */
+    public void clearAuthenticatedUserCache() {
+        authenticatedUserId = null;
+        authenticatedUsername = null;
     }
 }

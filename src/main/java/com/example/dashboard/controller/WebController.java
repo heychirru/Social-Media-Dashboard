@@ -1,9 +1,11 @@
 package com.example.dashboard.controller;
 
 import com.example.dashboard.api.SocialMediaApiService;
+import com.example.dashboard.api.InstagramApiService;
 import com.example.dashboard.model.SocialMediaPost;
 import com.example.dashboard.model.SocialMediaStats;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,12 @@ public class WebController {
 
     @Autowired
     private SocialMediaApiService apiService;
+    
+    @Autowired
+    private InstagramApiService instagramApiService;
+
+    @Value("${instagram.api.access-token:}")
+    private String instagramAccessToken;
 
     /**
      * Root path - HTML landing page
@@ -35,13 +43,22 @@ public class WebController {
         model.addAttribute("isConfigured", isConfigured);
         model.addAttribute("configStatus", configStatus);
 
-        if (!isConfigured) {
+        if (isConfigured) {
+            // Get authenticated username to show in the UI
+            String authenticatedUser = instagramApiService.getAuthenticatedUsername(instagramAccessToken);
+            if (authenticatedUser != null) {
+                model.addAttribute("authenticatedUser", authenticatedUser);
+                model.addAttribute("setupMessage", "Instagram API is configured for user: @" + authenticatedUser);
+                model.addAttribute("dashboardUrl", "/dashboard?username=" + authenticatedUser);
+                model.addAttribute("limitation", "Note: Instagram Basic Display API only provides access to your own data (@" + authenticatedUser + ")");
+            }
+        } else {
             model.addAttribute("setupMessage", "Please configure your Instagram API credentials to get started.");
             model.addAttribute("setupInstructions", Map.of(
                     "step1", "Get Instagram API credentials from Facebook Developers Console",
-                    "step2", "Set INSTAGRAM_ACCESS_TOKEN environment variable",
+                    "step2", "Set INSTAGRAM_ACCESS_TOKEN environment variable or update config.properties",
                     "step3", "Restart the application",
-                    "step4", "Test with /dashboard?username=YOUR_INSTAGRAM_USERNAME"
+                    "step4", "The system will automatically detect your authenticated Instagram account"
             ));
         }
 
@@ -64,14 +81,26 @@ public class WebController {
         Map<String, String> endpoints = new HashMap<>();
         endpoints.put("health", "/api/v1/health");
         endpoints.put("config", "/api/v1/config");
-        endpoints.put("dashboard", "/dashboard?username=YOUR_USERNAME");
-        endpoints.put("stats", "/api/v1/stats/YOUR_USERNAME");
-        endpoints.put("platforms", "/api/v1/platforms/YOUR_USERNAME");
+        
+        if (apiService.isInstagramConfigured()) {
+            String authenticatedUser = instagramApiService.getAuthenticatedUsername(instagramAccessToken);
+            if (authenticatedUser != null) {
+                info.put("authenticatedUser", authenticatedUser);
+                info.put("limitation", "Instagram Basic Display API only provides access to authenticated user's data");
+                endpoints.put("dashboard", "/dashboard?username=" + authenticatedUser);
+                endpoints.put("stats", "/api/v1/stats/" + authenticatedUser);
+                endpoints.put("platforms", "/api/v1/platforms/" + authenticatedUser);
+            }
+        } else {
+            endpoints.put("dashboard", "/dashboard?username=YOUR_USERNAME (requires configuration)");
+            endpoints.put("stats", "/api/v1/stats/YOUR_USERNAME (requires configuration)");
+            endpoints.put("platforms", "/api/v1/platforms/YOUR_USERNAME (requires configuration)");
+        }
 
         info.put("endpoints", endpoints);
 
         if (!apiService.isInstagramConfigured()) {
-            info.put("warning", "Instagram API is not configured. Please set INSTAGRAM_ACCESS_TOKEN environment variable.");
+            info.put("warning", "Instagram API is not configured. Please set INSTAGRAM_ACCESS_TOKEN environment variable or update config.properties.");
         }
 
         return info;
@@ -93,13 +122,43 @@ public class WebController {
                         "step1", "Visit https://developers.facebook.com/",
                         "step2", "Create an app and add Instagram Basic Display product",
                         "step3", "Generate an access token",
-                        "step4", "Set INSTAGRAM_ACCESS_TOKEN environment variable",
+                        "step4", "Set INSTAGRAM_ACCESS_TOKEN environment variable or update config.properties",
                         "step5", "Restart the application"
                 ));
                 return "error";
             }
 
-            // Fetch Instagram profile data
+            // Get authenticated user info
+            String authenticatedUser = instagramApiService.getAuthenticatedUsername(instagramAccessToken);
+            
+            if (authenticatedUser != null && !authenticatedUser.equalsIgnoreCase(username)) {
+                // Show API limitation error
+                model.addAttribute("error", "Instagram Basic Display API Limitation: Can only access data for the authenticated user (" + 
+                                           authenticatedUser + "). Requested user (" + username + ") is not accessible.");
+                model.addAttribute("username", username);
+                model.addAttribute("authenticatedUser", authenticatedUser);
+                model.addAttribute("requestedUser", username);
+                model.addAttribute("hasError", true);
+                model.addAttribute("errorType", "API_LIMITATION");
+                model.addAttribute("isApiLimitation", true);
+                model.addAttribute("correctUrl", "/dashboard?username=" + authenticatedUser);
+                model.addAttribute("apiLimitationInfo", Map.of(
+                    "reason", "Instagram Basic Display API only allows access to the authenticated user's data",
+                    "authenticatedUser", authenticatedUser,
+                    "solution1", "Click the link above to view data for the authenticated user",
+                    "solution2", "Instagram Basic Display API is designed for personal use only",
+                    "solution3", "To access other users' data, you would need Instagram Business API and proper permissions"
+                ));
+                model.addAttribute("suggestions", List.of(
+                        "Instagram Basic Display API only allows access to the authenticated user's data",
+                        "Click the link above to view data for the authenticated user: " + authenticatedUser,
+                        "This is not an error - it's how Instagram's API is designed for security",
+                        "Each user would need to authenticate separately to access their own data"
+                ));
+                return "error";
+            }
+
+            // Fetch Instagram profile data (this will now work correctly)
             SocialMediaStats profile = apiService.fetchInstagramProfile(username);
             System.out.println(">>> API returned profile: " + profile);
 
@@ -115,9 +174,16 @@ public class WebController {
             model.addAttribute("aggregatedStats", profile);
             model.addAttribute("platformData", platformData);
             model.addAttribute("posts", posts);
-            model.addAttribute("username", username);
+            model.addAttribute("username", profile.getUsername()); // Use actual username from API
+            model.addAttribute("displayUsername", profile.getUsername());
             model.addAttribute("totalPlatforms", 1);
             model.addAttribute("hasError", false);
+            
+            if (authenticatedUser != null) {
+                model.addAttribute("authenticatedUser", authenticatedUser);
+                model.addAttribute("isAuthenticatedUser", authenticatedUser.equalsIgnoreCase(profile.getUsername()));
+                model.addAttribute("apiLimitation", "Data shown is for authenticated user: " + authenticatedUser);
+            }
 
             return "dashboard";
 
@@ -138,8 +204,27 @@ public class WebController {
             model.addAttribute("hasError", true);
             model.addAttribute("errorType", "API_ERROR");
 
+            // Check if this is an API limitation error
+            if (e.getMessage().contains("can only access data for the authenticated user")) {
+                model.addAttribute("errorCategory", "API_LIMITATION");
+                model.addAttribute("isApiLimitation", true);
+                
+                // Extract authenticated username from error message if possible
+                String authenticatedUser = instagramApiService.getAuthenticatedUsername(instagramAccessToken);
+                if (authenticatedUser != null) {
+                    model.addAttribute("authenticatedUser", authenticatedUser);
+                    model.addAttribute("correctUrl", "/dashboard?username=" + authenticatedUser);
+                }
+                
+                model.addAttribute("suggestions", List.of(
+                        "Instagram Basic Display API only allows access to the authenticated user's data",
+                        "Click the link above to view data for the authenticated user: " + (authenticatedUser != null ? authenticatedUser : "unknown"),
+                        "This is not an error - it's a security feature of Instagram's API",
+                        "Each user needs to authenticate separately to access their own data"
+                ));
+            }
             // Provide specific error guidance based on error message
-            if (e.getMessage().contains("access denied") || e.getMessage().contains("OAuthException")) {
+            else if (e.getMessage().contains("access denied") || e.getMessage().contains("OAuthException")) {
                 model.addAttribute("errorCategory", "AUTHENTICATION");
                 model.addAttribute("suggestions", List.of(
                         "Check if your Instagram access token is valid and not expired",
@@ -160,8 +245,8 @@ public class WebController {
                 model.addAttribute("suggestions", List.of(
                         "Verify the Instagram username is correct",
                         "Check if the Instagram account exists and is public",
-                        "Try using the Instagram user ID instead of username",
-                        "Ensure the account is not private or restricted"
+                        "Note: Instagram Basic Display API only works with the authenticated user",
+                        "Make sure you're using the correct username for the token owner"
                 ));
             } else if (e.getMessage().contains("network") || e.getMessage().contains("connectivity")) {
                 model.addAttribute("errorCategory", "NETWORK");
@@ -176,7 +261,7 @@ public class WebController {
                 model.addAttribute("suggestions", List.of(
                         "Check the application logs for detailed error information",
                         "Verify your Instagram API configuration",
-                        "Try with a different Instagram username",
+                        "Remember: Instagram Basic Display API has access limitations",
                         "Contact support if the issue persists"
                 ));
             }
@@ -204,14 +289,15 @@ public class WebController {
             health.put("config_status", configStatus);
 
             if (isConfigured) {
-                // Test with a basic API call to verify connectivity
-                // Note: This would require a valid test user, so we'll just check configuration
+                String authenticatedUser = instagramApiService.getAuthenticatedUsername(instagramAccessToken);
+                health.put("authenticated_user", authenticatedUser);
                 health.put("instagram_service", "READY");
-                health.put("message", "Instagram API is configured and ready");
+                health.put("message", "Instagram API is configured and ready for user: " + authenticatedUser);
+                health.put("limitation", "Instagram Basic Display API only provides access to authenticated user's data");
             } else {
                 health.put("instagram_service", "NOT_CONFIGURED");
                 health.put("message", "Instagram API configuration required");
-                health.put("required_action", "Set INSTAGRAM_ACCESS_TOKEN environment variable");
+                health.put("required_action", "Set INSTAGRAM_ACCESS_TOKEN environment variable or update config.properties");
             }
 
         } catch (Exception e) {

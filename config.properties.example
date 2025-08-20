@@ -10,10 +10,50 @@ spring.jpa.hibernate.ddl-auto=create-drop
 # Error Handling
 server.error.include-message=always
 server.error.include-binding-errors=always
-server.error.include-stacktrace=on_param
+server.error.include-stacktrace=never
+server.error.whitelabel.enabled=false
 
-# Social Media API Configuration
-social.api.url=https://graph.instagram.com/v23.0
-social.api.token=$ {ADD YOUR TOKEN HERE}
+# Instagram API Configuration (Production Mode - No Fallbacks)
+instagram.api.url=https://graph.instagram.com/v21.0
+instagram.api.app-id=${INSTAGRAM_APP_ID:}
+instagram.api.app-secret=${INSTAGRAM_APP_SECRET:}
+instagram.api.access-token=${INSTAGRAM_ACCESS_TOKEN:}
+instagram.api.client-id=${INSTAGRAM_CLIENT_ID:}
+instagram.api.client-secret=${INSTAGRAM_CLIENT_SECRET:}
+instagram.api.redirect-uri=${INSTAGRAM_REDIRECT_URI:http://localhost:8080/auth/instagram/callback}
+
+# Rate limiting and retry configuration
+instagram.api.requests-per-hour=200
+instagram.api.max-retry-attempts=3
+instagram.api.retry-delay-ms=1000
+
 # Server Configuration
 server.port=8080
+
+# Logging Configuration (Production Level)
+logging.level.root=INFO
+logging.level.com.example.dashboard=INFO
+logging.level.org.springframework.web=WARN
+logging.level.org.springframework.web.client.RestTemplate=WARN
+
+# Production logging pattern
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n
+logging.pattern.file=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n
+
+# Application Info
+app.name=Social Media Dashboard
+app.version=1.0.0
+app.description=Professional social media analytics dashboard
+
+# Management endpoints (limited for production)
+management.endpoints.web.exposure.include=health,info
+management.endpoint.health.show-details=when-authorized
+management.endpoint.info.enabled=true
+
+# Security headers
+server.servlet.session.cookie.http-only=true
+server.servlet.session.cookie.secure=false
+server.servlet.session.timeout=30m
+
+# Connection timeout settings
+spring.mvc.async.request-timeout=30000
